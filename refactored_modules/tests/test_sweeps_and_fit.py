@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pytest
 
@@ -104,3 +105,12 @@ def test_plots_write_files(tmp_path):
     plot_fit(result, tmp_path / "fit.png")
     for name in ("heat.png", "sweep.png", "fit.png"):
         assert (tmp_path / name).stat().st_size > 1000
+
+
+def test_cuda_library_env_finds_venv_nvidia_dirs(tmp_path):
+    from refactored_modules.utils import cuda_library_env
+    lib = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "nvidia" / "npp" / "lib"
+    lib.mkdir(parents=True)
+    env = cuda_library_env(tmp_path, {"LD_LIBRARY_PATH": "/existing", "X": "1"})
+    parts = env["LD_LIBRARY_PATH"].split(os.pathsep)
+    assert str(lib) in parts and parts[-1] == "/existing" and env["X"] == "1"

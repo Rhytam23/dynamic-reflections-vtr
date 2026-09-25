@@ -1,4 +1,4 @@
-import os, re, subprocess
+import glob, os, re, subprocess
 from collections import deque
 from pathlib import Path
 from typing import Optional, Sequence
@@ -19,6 +19,21 @@ def run_streaming(cmd: Sequence[str], cwd: Optional[Path] = None, env: Optional[
         tail.append(line)
     if proc.wait() != 0:
         raise RuntimeError(f"Command failed (exit {proc.returncode}): {' '.join(map(str, cmd))}\n" + "".join(tail))
+
+
+def cuda_library_env(repo_path: Path, base_env: Optional[dict] = None) -> dict:
+    """Environment with the venv's nvidia/*/lib dirs (and system CUDA) on LD_LIBRARY_PATH.
+
+    torchcodec's CUDA build needs libnppicc.so.12, which is not on the loader path inside the
+    uv venv on Colab ("Could not load libtorchcodec").
+    """
+    env = dict(os.environ if base_env is None else base_env)
+    dirs = sorted(glob.glob(str(Path(repo_path) / ".venv" / "lib" / "python*" / "site-packages" / "nvidia" / "*" / "lib")))
+    dirs += [d for d in ("/usr/local/cuda/lib64", "/usr/lib64-nvidia") if os.path.isdir(d)]
+    if env.get("LD_LIBRARY_PATH"):
+        dirs.append(env["LD_LIBRARY_PATH"])
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(dirs)
+    return env
 
 
 def link_to_persistent(repo_path: Path, persist_dir: Path, names=("data", "results")):
@@ -57,6 +72,7 @@ def setup_environment(repo_path: Path, persist_dir: Optional[Path] = None):
     print("Creating and syncing uv virtual environment (uv sync downloads PyTorch etc.: 5-15 min)...", flush=True)
     run_streaming(["uv", "venv", "--python", "3.13", "--allow-existing"])
     run_streaming(["uv", "sync"])
+    run_streaming(["uv", "pip", "install", "nvidia-npp-cu12"])  # libnppicc.so.12 for torchcodec
     print("Environment setup complete.", flush=True)
 
 def patch_scripts(repo_path: Path):

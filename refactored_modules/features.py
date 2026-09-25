@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from .utils import run_streaming
+from .utils import cuda_library_env, run_streaming
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def extract_features(
             cmd += ["--num_frames", str(num_frames)]
     if feature_dir is not None:
         cmd += ["--feature_dir", str(feature_dir)]
-    env = os.environ.copy()
+    env = cuda_library_env(repo_path)
     if hf_token:
         env["HF_TOKEN"] = hf_token
     logger.info("Running: %s", " ".join(cmd))

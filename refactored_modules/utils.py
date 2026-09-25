@@ -21,18 +21,38 @@ def run_streaming(cmd: Sequence[str], cwd: Optional[Path] = None, env: Optional[
         raise RuntimeError(f"Command failed (exit {proc.returncode}): {' '.join(map(str, cmd))}\n" + "".join(tail))
 
 
-def cuda_library_env(repo_path: Path, base_env: Optional[dict] = None) -> dict:
+def venv_python(repo_path: Path) -> Path:
+    return Path(repo_path) / ".venv" / "bin" / "python"
+
+
+def find_library_dirs(repo_path: Path, name: str = "libnppicc.so") -> list:
+    """Directories that actually contain `name*` (venv first, then system CUDA locations).
+
+    Searches the file system, so call it once during setup, not on every command.
+    """
+    dirs = []
+    for root in (Path(repo_path) / ".venv", Path("/usr/local"), Path("/usr/lib"), Path("/opt")):
+        if root.exists():
+            for hit in root.rglob(name + "*"):
+                d = str(hit.parent)
+                if d not in dirs:
+                    dirs.append(d)
+    return dirs
+
+
+def cuda_library_env(repo_path: Path, base_env: Optional[dict] = None, extra_dirs: Sequence[str] = ()) -> dict:
     """Environment with the venv's nvidia/*/lib dirs (and system CUDA) on LD_LIBRARY_PATH.
 
     torchcodec's CUDA build needs libnppicc.so.12, which is not on the loader path inside the
     uv venv on Colab ("Could not load libtorchcodec").
     """
     env = dict(os.environ if base_env is None else base_env)
-    dirs = sorted(glob.glob(str(Path(repo_path) / ".venv" / "lib" / "python*" / "site-packages" / "nvidia" / "*" / "lib")))
+    dirs = list(extra_dirs)
+    dirs += sorted(glob.glob(str(Path(repo_path) / ".venv" / "lib" / "python*" / "site-packages" / "nvidia" / "*" / "lib")))
     dirs += [d for d in ("/usr/local/cuda/lib64", "/usr/lib64-nvidia") if os.path.isdir(d)]
     if env.get("LD_LIBRARY_PATH"):
         dirs.append(env["LD_LIBRARY_PATH"])
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(dirs)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(dict.fromkeys(dirs))
     return env
 
 
@@ -72,7 +92,16 @@ def setup_environment(repo_path: Path, persist_dir: Optional[Path] = None):
     print("Creating and syncing uv virtual environment (uv sync downloads PyTorch etc.: 5-15 min)...", flush=True)
     run_streaming(["uv", "venv", "--python", "3.13", "--allow-existing"])
     run_streaming(["uv", "sync"])
-    run_streaming(["uv", "pip", "install", "nvidia-npp-cu12"])  # libnppicc.so.12 for torchcodec
+    # torchcodec's CUDA build needs libnppicc.so.12. Install into THIS venv explicitly (a plain
+    # `uv pip install` did not land in it on Colab), find where the library really is, expose it
+    # to every later command in this session, and fail here (not after a long extraction) if
+    # torchcodec still cannot load.
+    py = venv_python(repo_path)
+    run_streaming(["uv", "pip", "install", "--python", str(py), "nvidia-npp-cu12"])
+    lib_dirs = find_library_dirs(repo_path)
+    print(f"libnppicc found in: {lib_dirs or 'NOWHERE'}", flush=True)
+    os.environ.update(cuda_library_env(repo_path, extra_dirs=lib_dirs))
+    run_streaming([str(py), "-c", "import torchcodec; print('torchcodec OK', torchcodec.__version__)"], env=dict(os.environ))
     print("Environment setup complete.", flush=True)
 
 def patch_scripts(repo_path: Path):

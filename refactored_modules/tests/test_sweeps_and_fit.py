@@ -114,3 +114,15 @@ def test_cuda_library_env_finds_venv_nvidia_dirs(tmp_path):
     env = cuda_library_env(tmp_path, {"LD_LIBRARY_PATH": "/existing", "X": "1"})
     parts = env["LD_LIBRARY_PATH"].split(os.pathsep)
     assert str(lib) in parts and parts[-1] == "/existing" and env["X"] == "1"
+
+
+def test_find_library_dirs_and_extra_dirs(tmp_path):
+    from refactored_modules.utils import cuda_library_env, find_library_dirs
+    lib = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "nvidia" / "npp" / "lib"
+    lib.mkdir(parents=True)
+    (lib / "libnppicc.so.12").write_text("")
+    assert find_library_dirs(tmp_path) == [str(lib)]
+    env = cuda_library_env(tmp_path, {}, extra_dirs=["/somewhere/lib"])
+    parts = env["LD_LIBRARY_PATH"].split(os.pathsep)
+    assert parts[0] == "/somewhere/lib" and str(lib) in parts
+    assert len(parts) == len(set(parts))  # no duplicates

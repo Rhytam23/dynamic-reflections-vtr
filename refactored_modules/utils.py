@@ -1,4 +1,4 @@
-import glob, os, re, subprocess
+import os, re, subprocess
 from collections import deque
 from pathlib import Path
 from typing import Optional, Sequence
@@ -11,6 +11,8 @@ def run_streaming(cmd: Sequence[str], cwd: Optional[Path] = None, env: Optional[
     """Run a command, print its output live (Colab hides child-process output otherwise),
     and on failure raise with the last lines so the real error is visible."""
     print("$ " + " ".join(map(str, cmd)), flush=True)
+    env = dict(os.environ if env is None else env)
+    env.setdefault("PYTHONUNBUFFERED", "1")  # child Python otherwise buffers when piped and output arrives in bursts
     proc = subprocess.Popen(list(map(str, cmd)), cwd=cwd, env=env, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True, bufsize=1)
     tail = deque(maxlen=40)
@@ -23,37 +25,6 @@ def run_streaming(cmd: Sequence[str], cwd: Optional[Path] = None, env: Optional[
 
 def venv_python(repo_path: Path) -> Path:
     return Path(repo_path) / ".venv" / "bin" / "python"
-
-
-def find_library_dirs(repo_path: Path, name: str = "libnppicc.so") -> list:
-    """Directories that actually contain `name*` (venv first, then system CUDA locations).
-
-    Searches the file system, so call it once during setup, not on every command.
-    """
-    dirs = []
-    for root in (Path(repo_path) / ".venv", Path("/usr/local"), Path("/usr/lib"), Path("/opt")):
-        if root.exists():
-            for hit in root.rglob(name + "*"):
-                d = str(hit.parent)
-                if d not in dirs:
-                    dirs.append(d)
-    return dirs
-
-
-def cuda_library_env(repo_path: Path, base_env: Optional[dict] = None, extra_dirs: Sequence[str] = ()) -> dict:
-    """Environment with the venv's nvidia/*/lib dirs (and system CUDA) on LD_LIBRARY_PATH.
-
-    torchcodec's CUDA build needs libnppicc.so.12, which is not on the loader path inside the
-    uv venv on Colab ("Could not load libtorchcodec").
-    """
-    env = dict(os.environ if base_env is None else base_env)
-    dirs = list(extra_dirs)
-    dirs += sorted(glob.glob(str(Path(repo_path) / ".venv" / "lib" / "python*" / "site-packages" / "nvidia" / "*" / "lib")))
-    dirs += [d for d in ("/usr/local/cuda/lib64", "/usr/lib64-nvidia") if os.path.isdir(d)]
-    if env.get("LD_LIBRARY_PATH"):
-        dirs.append(env["LD_LIBRARY_PATH"])
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(dict.fromkeys(dirs))
-    return env
 
 
 def link_to_persistent(repo_path: Path, persist_dir: Path, names=("data", "results")):
@@ -71,18 +42,24 @@ def link_to_persistent(repo_path: Path, persist_dir: Path, names=("data", "resul
         print(f"Linked {link} -> {target}", flush=True)
 
 
-def setup_environment(repo_path: Path, persist_dir: Optional[Path] = None):
+def clone_authors_repo(repo_path: Path, persist_dir: Optional[Path] = None):
+    """Clone the authors' repo (idempotent) and link data/results to Drive. No GPU or venv needed."""
     repo_url = f"https://github.com/google-deepmind/{repo_path.name}.git"
-    if not repo_path.exists():
+    if not (repo_path / ".git").exists():  # a directory holding only results is not a clone
         print(f"Cloning repository into {repo_path}...", flush=True)
         repo_path.parent.mkdir(parents=True, exist_ok=True)
-        run_streaming(["git", "clone", repo_url, str(repo_path)])
-    os.chdir(repo_path)
+        if repo_path.exists() and not any(repo_path.iterdir()):
+            repo_path.rmdir()
+        run_streaming(["git", "clone", "--depth", "1", repo_url, str(repo_path)])
     if persist_dir is not None:
         link_to_persistent(repo_path, persist_dir)
+
+
+def setup_environment(repo_path: Path, persist_dir: Optional[Path] = None):
+    """Build the authors' uv environment and check it imports what extraction needs."""
+    clone_authors_repo(repo_path, persist_dir)
+    os.chdir(repo_path)
     run_streaming(["pip", "install", "-q", "uv"])
-    run_streaming(["apt-get", "update", "-qq"])
-    run_streaming(["apt-get", "install", "-y", "-qq", "ffmpeg"])
     pyproject_path = repo_path / "pyproject.toml"
     if pyproject_path.exists():
         content = pyproject_path.read_text()
@@ -92,22 +69,32 @@ def setup_environment(repo_path: Path, persist_dir: Optional[Path] = None):
     print("Creating and syncing uv virtual environment (uv sync downloads PyTorch etc.: 5-15 min)...", flush=True)
     run_streaming(["uv", "venv", "--python", "3.13", "--allow-existing"])
     run_streaming(["uv", "sync"])
-    # torchcodec's CUDA build needs libnppicc.so.12. Install into THIS venv explicitly (a plain
-    # `uv pip install` did not land in it on Colab), find where the library really is, expose it
-    # to every later command in this session, and fail here (not after a long extraction) if
-    # torchcodec still cannot load.
     py = venv_python(repo_path)
-    run_streaming(["uv", "pip", "install", "--python", str(py), "nvidia-npp-cu12"])
-    lib_dirs = find_library_dirs(repo_path)
-    print(f"libnppicc found in: {lib_dirs or 'NOWHERE'}", flush=True)
-    os.environ.update(cuda_library_env(repo_path, extra_dirs=lib_dirs))
-    run_streaming([str(py), "-c", "import torchcodec; print('torchcodec OK', torchcodec.__version__)"], env=dict(os.environ))
+    # OpenCV replaces torchcodec for video decoding (see cv2_decoder.py); install it into THIS venv explicitly.
+    run_streaming(["uv", "pip", "install", "--python", str(py), "opencv-python-headless"])
+    # Fail here, in minutes, if the environment cannot import what extraction needs.
+    run_streaming([str(py), "-c",
+                   "import cv2, torch, transformers, timm, tyro; "
+                   "print('env OK | torch', torch.__version__, '| cuda', torch.cuda.is_available(), "
+                   "'| transformers', transformers.__version__, '| cv2', cv2.__version__)"])
     print("Environment setup complete.", flush=True)
 
-def patch_scripts(repo_path: Path):
-    download_script_path = repo_path / "src" / "vprh" / "misc" / "download_pvd.py"
-    if download_script_path.exists():
-        fixed_script = """import argparse, json
+
+def _patch_file(path: Path, old: str, new: str, marker: str, strict: bool = True) -> str:
+    """Replace `old` with `new` in `path`. Idempotent (skips if `marker` is present); if the
+    target text is missing, raise (strict) instead of silently patching nothing."""
+    text = path.read_text()
+    if marker in text:
+        return "already patched"
+    if old not in text:
+        if strict:
+            raise RuntimeError(f"Patch target not found in {path}: {old!r} (upstream code changed?)")
+        return "target not found (skipped)"
+    path.write_text(text.replace(old, new))
+    return "patched"
+
+
+PVD_DOWNLOAD_SCRIPT = """import argparse, json
 from pathlib import Path
 from datasets import load_dataset, Video
 from tqdm import tqdm
@@ -117,35 +104,74 @@ def main():
     parser.add_argument('--local_json_path', '-l', type=Path, default=None)
     parser.add_argument('--output_dir', '-o', type=Path, default='data/pvd')
     args = parser.parse_args()
-    ds = load_dataset('facebook/PE-Video', split='test', streaming=True)
-    ds = ds.cast_column('mp4', Video(decode=False))
     video_path = Path(args.output_dir)
     video_path.mkdir(exist_ok=True, parents=True)
-    if args.local_json_path is not None:
-        print(f'Downloading videos from {args.local_json_path}')
-        with open(args.local_json_path) as f:
-            video_ids = {str(json.loads(line)['video_id']) for line in f}
-        video_ids_to_find = video_ids.copy()
-        with tqdm(total=len(video_ids), desc='Downloading videos') as pbar:
-            for row in ds:
-                if not video_ids_to_find: break
-                key = row['__key__']
-                if key in video_ids_to_find:
-                    with open(video_path / f'{key}.bin', 'wb') as f:
-                        f.write(row['mp4']['bytes'] if row['mp4'].get('bytes') else open(row['mp4']['path'], 'rb').read())
-                    pbar.update(1)
-                    video_ids_to_find.remove(key)
+    if args.local_json_path is None:
+        raise SystemExit('pass --local_json_path')
+    with open(args.local_json_path) as f:
+        video_ids = {str(json.loads(line)['video_id']) for line in f}
+    have = {p.stem for p in video_path.glob('*.bin') if p.stat().st_size > 0}
+    video_ids_to_find = video_ids - have
+    print(f'{len(video_ids)} videos wanted, {len(have & video_ids)} already on disk, {len(video_ids_to_find)} to download')
+    if not video_ids_to_find:
+        return
+    ds = load_dataset('facebook/PE-Video', split='test', streaming=True)
+    ds = ds.cast_column('mp4', Video(decode=False))
+    with tqdm(total=len(video_ids_to_find), desc='Downloading videos') as pbar:
+        for row in ds:
+            if not video_ids_to_find: break
+            key = row['__key__']
+            if key in video_ids_to_find:
+                tmp = video_path / f'{key}.bin.part'
+                with open(tmp, 'wb') as f:
+                    f.write(row['mp4']['bytes'] if row['mp4'].get('bytes') else open(row['mp4']['path'], 'rb').read())
+                tmp.rename(video_path / f'{key}.bin')
+                pbar.update(1)
+                video_ids_to_find.remove(key)
+    if video_ids_to_find:
+        raise SystemExit(f'{len(video_ids_to_find)} videos were not found in the dataset, e.g. {sorted(video_ids_to_find)[:3]}')
 if __name__ == '__main__': main()
 """
-        download_script_path.write_text(fixed_script)
-        logger.info("Patched download_pvd.py")
-    
-    video_py_path = repo_path / "src" / "vprh" / "registry" / "video.py"
-    if video_py_path.exists():
-        content = video_py_path.read_text()
-        content = content.replace(
-            "resolve_data_config(self.model.pretrained_cfg, model=self.model)",
-            "resolve_data_config(getattr(self.model, 'pretrained_cfg', None) or getattr(self.model, 'default_cfg', None) or {}, model=self.model)"
-        )
-        video_py_path.write_text(content)
-        logger.info("Patched video.py")
+
+PVD_IMPORT_OLD = "from torchcodec.decoders import VideoDecoder\n"
+PVD_IMPORT_NEW = (
+    "try:  # OpenCV decoder first: torchcodec's CUDA build often cannot load on Colab\n"
+    "  import cv2  # noqa: F401\n"
+    "  from vprh.dataloaders._cv2_decoder import VideoDecoder\n"
+    "except ImportError:\n"
+    "  from torchcodec.decoders import VideoDecoder\n"
+)
+
+
+def patch_scripts(repo_path: Path):
+    """Apply our fixes to the authors' repo. Idempotent; raises if a patch target has disappeared."""
+    repo_path = Path(repo_path)
+    results = {}
+
+    # 1. resumable download script that works with current `datasets`
+    dl = repo_path / "src" / "vprh" / "misc" / "download_pvd.py"
+    dl.write_text(PVD_DOWNLOAD_SCRIPT)
+    results["download_pvd.py"] = "replaced"
+
+    # 2. timm config fix (only matters for some encoders; tolerate upstream fixing it)
+    results["registry/video.py"] = _patch_file(
+        repo_path / "src" / "vprh" / "registry" / "video.py",
+        "resolve_data_config(self.model.pretrained_cfg, model=self.model)",
+        "resolve_data_config(getattr(self.model, 'pretrained_cfg', None) or getattr(self.model, 'default_cfg', None) or {}, model=self.model)",
+        marker="getattr(self.model, 'pretrained_cfg', None)", strict=False)
+
+    # 3. OpenCV decoder instead of torchcodec (imported even for text-only extraction)
+    shim_src = Path(__file__).with_name("cv2_decoder.py").read_text()
+    (repo_path / "src" / "vprh" / "dataloaders" / "_cv2_decoder.py").write_text(shim_src)
+    results["dataloaders/pvd.py"] = _patch_file(
+        repo_path / "src" / "vprh" / "dataloaders" / "pvd.py",
+        PVD_IMPORT_OLD, PVD_IMPORT_NEW, marker="_cv2_decoder")
+
+    # 4. 10 DataLoader workers can exhaust a 12 GB Colab machine
+    results["extract_features.py"] = _patch_file(
+        repo_path / "src" / "vprh" / "extract_features.py",
+        "num_workers=10,", "num_workers=min(4, os.cpu_count() or 2),", marker="os.cpu_count()")
+
+    for name, status in results.items():
+        print(f"patch {name}: {status}", flush=True)
+    return results

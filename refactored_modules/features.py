@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from .utils import cuda_library_env, run_streaming
+from .utils import run_streaming
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ def extract_features(
     num_frames: int = -1,
     feature_dir: Optional[Path] = None,
     hf_token: Optional[str] = None,
+    annotation_path: Optional[Path] = None,
 ):
     """Run the authors' `scripts/main_extract.py` for LLM ('llm') or video ('video') features.
 
@@ -48,7 +49,7 @@ def extract_features(
     """
     if which not in ("llm", "video"):
         raise ValueError("which must be 'llm' or 'video'")
-    cmd = ["uv", "run", "scripts/main_extract.py", config, f"--{which}_only"]
+    cmd = ["uv", "run", "--no-sync", "scripts/main_extract.py", config, f"--{which}_only"]  # --no-sync: env was built once in setup
     if which == "llm":
         if not llm_names:
             raise ValueError("llm_names is required for LLM extraction")
@@ -63,7 +64,9 @@ def extract_features(
             cmd += ["--num_frames", str(num_frames)]
     if feature_dir is not None:
         cmd += ["--feature_dir", str(feature_dir)]
-    env = cuda_library_env(repo_path)
+    if annotation_path is not None:  # e.g. a small jsonl for the smoke test
+        cmd += ["--annotation_path", str(annotation_path)]
+    env = os.environ.copy()
     if hf_token:
         env["HF_TOKEN"] = hf_token
     logger.info("Running: %s", " ".join(cmd))

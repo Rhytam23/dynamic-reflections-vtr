@@ -1,6 +1,7 @@
 """Frames x captions sweeps (paper Fig. 3) on top of the authors' feature extraction."""
 import json
 import logging
+import shutil
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
 
@@ -13,20 +14,38 @@ from .scaling_law import fit_scaling_law
 logger = logging.getLogger(__name__)
 
 
+def extract_caption_sweep(repo_path: Path, feature_dir: Path, llm_name: str, caption_counts: Sequence[int],
+                          hf_token: Optional[str] = None):
+    """One LLM extraction per caption count (skipped by the authors' script if the file exists)."""
+    for nc in caption_counts:
+        extract_features(repo_path, "llm", llm_names=[llm_name], num_captions=nc,
+                         feature_dir=feature_dir, hf_token=hf_token)
+
+
+def extract_frame_sweep(repo_path: Path, feature_dir: Path, vision_name: str, frame_counts: Sequence[int]):
+    """One video extraction per frame count (skipped if the file exists, so an interrupted run resumes)."""
+    for nf in frame_counts:
+        extract_features(repo_path, "video", video_names=[vision_name], num_frames=nf, feature_dir=feature_dir)
+
+
 def extract_sweep_features(
     repo_path: Path, feature_dir: Path, llm_name: str, vision_name: str,
     frame_counts: Sequence[int], caption_counts: Sequence[int], hf_token: Optional[str] = None,
 ):
-    """One LLM extraction per caption count and one video extraction per frame count.
+    extract_caption_sweep(repo_path, feature_dir, llm_name, caption_counts, hf_token)
+    extract_frame_sweep(repo_path, feature_dir, vision_name, frame_counts)
 
-    Existing files are skipped by the authors' script, so an interrupted run resumes.
-    """
-    for nc in caption_counts:
-        extract_features(repo_path, "llm", llm_names=[llm_name], num_captions=nc,
-                         feature_dir=feature_dir, hf_token=hf_token)
-    for nf in frame_counts:
-        extract_features(repo_path, "video", video_names=[vision_name], num_frames=nf,
-                         feature_dir=feature_dir)
+
+def alias_full_caption_features(feature_dir: Path, llm_name: str, n_captions: int, llm_pool: str = "avg",
+                                dataset: str = "pvd") -> bool:
+    """If every video has exactly n_captions captions, the default extraction (all captions) IS the
+    n_captions run: reuse it instead of paying for the same LLM pass again. Returns True if aliased."""
+    full = feature_path(feature_dir, dataset, llm_name, llm_pool)
+    alias = feature_path(feature_dir, dataset, llm_name, llm_pool, num_captions=n_captions)
+    if alias.exists() or not full.exists():
+        return alias.exists()
+    shutil.copyfile(full, alias)
+    return True
 
 
 def compute_grid(

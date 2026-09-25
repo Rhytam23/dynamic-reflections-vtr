@@ -1,14 +1,15 @@
-"""Figures for the alignment results (matplotlib, headless-safe)."""
+"""Figures for the alignment results. Saves to disk and closes the figure (no duplicate inline display).
+
+Does not force a matplotlib backend, so notebook cells that call plt.show() still display inline on Colab;
+headless runs (tests) set MPLBACKEND=Agg.
+"""
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 
-import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-
-from .scaling_law import predict  # noqa: E402
+from .scaling_law import predict
 
 
 def _finish(fig, path: Optional[Path]):
@@ -16,6 +17,7 @@ def _finish(fig, path: Optional[Path]):
     if path is not None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(path, dpi=150)
+        plt.close(fig)
     return fig
 
 

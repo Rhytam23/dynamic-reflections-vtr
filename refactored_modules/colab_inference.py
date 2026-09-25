@@ -35,17 +35,30 @@ def sample_frames(video_path: Path, n: int = 5):
         cap.release()
 
 
-def generate_description(retrieved: Sequence[str], model_name: str = "google/gemma-2-2b-it", max_new_tokens: int = 80) -> str:
-    """Merge retrieved captions into one description with a local LLM (text only)."""
+def generate_descriptions(batches: Sequence[Sequence[str]], model_name: str = "google/gemma-2-2b-it",
+                          max_new_tokens: int = 80) -> list:
+    """For each list of retrieved captions, merge them into one description with a local LLM (text only).
+
+    The model is loaded once for all batches.
+    """
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
+    # T4 has no native bfloat16 and Gemma-2 overflows in float16, so use float32 there (2B = ~10 GB).
+    bf16 = torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8
     tok = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
-    chat = [{"role": "user", "content": build_fusion_prompt(retrieved)}]
-    ids = tok.apply_chat_template(chat, add_generation_prompt=True, return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        out = model.generate(ids, max_new_tokens=max_new_tokens, do_sample=False)
-    text = tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True).strip()
+    model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.bfloat16 if bf16 else torch.float32, device_map="auto")
+    outputs = []
+    for retrieved in batches:
+        chat = [{"role": "user", "content": build_fusion_prompt(retrieved)}]
+        enc = tok.apply_chat_template(chat, add_generation_prompt=True, return_tensors="pt", return_dict=True)
+        ids = enc["input_ids"].to(model.device)
+        with torch.no_grad():
+            out = model.generate(ids, max_new_tokens=max_new_tokens, do_sample=False)
+        outputs.append(tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True).strip())
     del model
     torch.cuda.empty_cache()
-    return text
+    return outputs
+
+
+def generate_description(retrieved: Sequence[str], **kw) -> str:
+    return generate_descriptions([retrieved], **kw)[0]

@@ -54,8 +54,8 @@ def test_extract_features_builds_expected_command(monkeypatch):
     monkeypatch.setattr(features, "run_streaming", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
     features.extract_features("/repo", "llm", llm_names=["gemma2-2b-it"], num_captions=4,
                               feature_dir="out", hf_token="tok")
-    assert seen["cmd"][:5] == ["uv", "run", "scripts/main_extract.py", "pvd_sample", "--llm_only"]
-    assert ["--llm_names", "gemma2-2b-it"] == seen["cmd"][5:7]
+    assert seen["cmd"][:6] == ["uv", "run", "--no-sync", "scripts/main_extract.py", "pvd_sample", "--llm_only"]
+    assert ["--llm_names", "gemma2-2b-it"] == seen["cmd"][6:8]
     assert "--num_captions" in seen["cmd"] and "--feature_dir" in seen["cmd"]
     assert seen["kw"]["env"]["HF_TOKEN"] == "tok" and seen["kw"]["cwd"] == "/repo"
     with pytest.raises(ValueError):
@@ -105,24 +105,3 @@ def test_plots_write_files(tmp_path):
     plot_fit(result, tmp_path / "fit.png")
     for name in ("heat.png", "sweep.png", "fit.png"):
         assert (tmp_path / name).stat().st_size > 1000
-
-
-def test_cuda_library_env_finds_venv_nvidia_dirs(tmp_path):
-    from refactored_modules.utils import cuda_library_env
-    lib = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "nvidia" / "npp" / "lib"
-    lib.mkdir(parents=True)
-    env = cuda_library_env(tmp_path, {"LD_LIBRARY_PATH": "/existing", "X": "1"})
-    parts = env["LD_LIBRARY_PATH"].split(os.pathsep)
-    assert str(lib) in parts and parts[-1] == "/existing" and env["X"] == "1"
-
-
-def test_find_library_dirs_and_extra_dirs(tmp_path):
-    from refactored_modules.utils import cuda_library_env, find_library_dirs
-    lib = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages" / "nvidia" / "npp" / "lib"
-    lib.mkdir(parents=True)
-    (lib / "libnppicc.so.12").write_text("")
-    assert find_library_dirs(tmp_path) == [str(lib)]
-    env = cuda_library_env(tmp_path, {}, extra_dirs=["/somewhere/lib"])
-    parts = env["LD_LIBRARY_PATH"].split(os.pathsep)
-    assert parts[0] == "/somewhere/lib" and str(lib) in parts
-    assert len(parts) == len(set(parts))  # no duplicates

@@ -1,30 +1,63 @@
 import os, re, subprocess
+from collections import deque
 from pathlib import Path
+from typing import Optional, Sequence
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def setup_environment(repo_path: Path):
+
+def run_streaming(cmd: Sequence[str], cwd: Optional[Path] = None, env: Optional[dict] = None):
+    """Run a command, print its output live (Colab hides child-process output otherwise),
+    and on failure raise with the last lines so the real error is visible."""
+    print("$ " + " ".join(map(str, cmd)), flush=True)
+    proc = subprocess.Popen(list(map(str, cmd)), cwd=cwd, env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+    tail = deque(maxlen=40)
+    for line in proc.stdout:
+        print(line, end="", flush=True)
+        tail.append(line)
+    if proc.wait() != 0:
+        raise RuntimeError(f"Command failed (exit {proc.returncode}): {' '.join(map(str, cmd))}\n" + "".join(tail))
+
+
+def link_to_persistent(repo_path: Path, persist_dir: Path, names=("data", "results")):
+    """Keep big/slow outputs on Drive while the repo and its venv stay on the local disk.
+
+    Drive cannot hold a venv (no symlink support), but symlinks *from* local disk *to* Drive work.
+    """
+    for name in names:
+        target = Path(persist_dir) / name
+        target.mkdir(parents=True, exist_ok=True)
+        link = Path(repo_path) / name
+        if link.is_symlink() or link.exists():
+            continue
+        link.symlink_to(target, target_is_directory=True)
+        print(f"Linked {link} -> {target}", flush=True)
+
+
+def setup_environment(repo_path: Path, persist_dir: Optional[Path] = None):
     repo_url = f"https://github.com/google-deepmind/{repo_path.name}.git"
     if not repo_path.exists():
-        logger.info(f"Cloning repository into {repo_path}...")
+        print(f"Cloning repository into {repo_path}...", flush=True)
         repo_path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", repo_url, str(repo_path)], check=True)
+        run_streaming(["git", "clone", repo_url, str(repo_path)])
     os.chdir(repo_path)
-    subprocess.run(["pip", "install", "-q", "uv"], check=True)
-    subprocess.run(["apt-get", "update", "-qq"], check=True)
-    subprocess.run(["apt-get", "install", "-y", "-qq", "ffmpeg"], check=True)
+    if persist_dir is not None:
+        link_to_persistent(repo_path, persist_dir)
+    run_streaming(["pip", "install", "-q", "uv"])
+    run_streaming(["apt-get", "update", "-qq"])
+    run_streaming(["apt-get", "install", "-y", "-qq", "ffmpeg"])
     pyproject_path = repo_path / "pyproject.toml"
     if pyproject_path.exists():
         content = pyproject_path.read_text()
         content = re.sub(r'"transformers>=([^"]+)"', r'"transformers>=\1,<5.0.0"', content)
         pyproject_path.write_text(content)
         logger.info("Patched pyproject.toml: transformers pinned to <5.0.0")
-    logger.info("Creating and syncing uv virtual environment...")
-    subprocess.run(["uv", "venv", "--python", "3.13"], check=True)
-    subprocess.run(["uv", "sync"], check=True)
-    logger.info("Environment setup complete.")
+    print("Creating and syncing uv virtual environment (uv sync downloads PyTorch etc.: 5-15 min)...", flush=True)
+    run_streaming(["uv", "venv", "--python", "3.13", "--allow-existing"])
+    run_streaming(["uv", "sync"])
+    print("Environment setup complete.", flush=True)
 
 def patch_scripts(repo_path: Path):
     download_script_path = repo_path / "src" / "vprh" / "misc" / "download_pvd.py"

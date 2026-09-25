@@ -50,13 +50,13 @@ def test_feature_path_matches_authors_naming():
 
 def test_extract_features_builds_expected_command(monkeypatch):
     seen = {}
-    monkeypatch.setattr(features.subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
+    monkeypatch.setattr(features, "run_streaming", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
     features.extract_features("/repo", "llm", llm_names=["gemma2-2b-it"], num_captions=4,
                               feature_dir="out", hf_token="tok")
     assert seen["cmd"][:5] == ["uv", "run", "scripts/main_extract.py", "pvd_sample", "--llm_only"]
     assert ["--llm_names", "gemma2-2b-it"] == seen["cmd"][5:7]
     assert "--num_captions" in seen["cmd"] and "--feature_dir" in seen["cmd"]
-    assert seen["kw"]["env"]["HF_TOKEN"] == "tok" and seen["kw"]["check"] is True
+    assert seen["kw"]["env"]["HF_TOKEN"] == "tok" and seen["kw"]["cwd"] == "/repo"
     with pytest.raises(ValueError):
         features.extract_features("/repo", "llm")  # would silently fall back to the 9B model
 

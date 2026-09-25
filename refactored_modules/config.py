@@ -28,5 +28,9 @@ class PVDConfig:
     def pool_for(self, video_model: str) -> str:
         return self.pool_overrides.get(video_model, self.vision_pool)
 
+    work_dir: Path = Path("/content")  # local disk: the authors' repo and its venv live here (Drive cannot hold a venv)
+
     def __post_init__(self):
-        self.repo_full_path = self.drive_base_dir / self.repo_name
+        self.repo_full_path = self.work_dir / self.repo_name
+        # videos and features live on Drive (symlinked into the repo) so they survive a Colab disconnect
+        self.persist_dir = self.drive_base_dir / "persist"

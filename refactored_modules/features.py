@@ -1,11 +1,12 @@
 """Feature file naming, extraction (via the authors' scripts) and loading."""
 import logging
 import os
-import subprocess
 from pathlib import Path
 from typing import Optional, Sequence
 
 import numpy as np
+
+from .utils import run_streaming
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def extract_features(
     if hf_token:
         env["HF_TOKEN"] = hf_token
     logger.info("Running: %s", " ".join(cmd))
-    subprocess.run(cmd, cwd=repo_path, env=env, check=True)
+    run_streaming(cmd, cwd=repo_path, env=env)
 
 
 def load_features(path: Path) -> np.ndarray:

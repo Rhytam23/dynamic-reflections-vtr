@@ -1,6 +1,5 @@
 import json
 import logging
-import subprocess
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -8,6 +7,7 @@ import numpy as np
 
 from .alignment import layer_sweep
 from .features import feature_path, load_features
+from .utils import run_streaming
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +15,11 @@ logger = logging.getLogger(__name__)
 def download_pvd_dataset(json_path: Path, output_dir: Path, repo_path: Optional[Path] = None):
     """Download the PVD videos listed in `json_path` (run from the authors' repo root)."""
     logger.info(f"Downloading dataset to {output_dir}...")
-    subprocess.run(
+    # plain Colab python (not uv): avoids the datasets/torchcodec conflict noted in the original notebook
+    run_streaming(["pip", "install", "-q", "datasets", "tqdm"])
+    run_streaming(
         ["python", "src/vprh/misc/download_pvd.py", "-l", str(json_path), "-o", str(output_dir)],
-        cwd=repo_path, check=True,
+        cwd=repo_path,
     )
     logger.info("Dataset download complete.")
 

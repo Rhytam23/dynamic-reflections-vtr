@@ -9,18 +9,20 @@ def setup_environment(repo_path: Path):
     repo_url = f"https://github.com/google-deepmind/{repo_path.name}.git"
     if not repo_path.exists():
         logger.info(f"Cloning repository into {repo_path}...")
+        repo_path.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "clone", repo_url, str(repo_path)], check=True)
     os.chdir(repo_path)
     subprocess.run(["pip", "install", "-q", "uv"], check=True)
-    subprocess.run(["apt-get", "update", "-qq", "&&", "apt-get", "install", "-y", "-qq", "ffmpeg"], shell=True, check=True)
+    subprocess.run(["apt-get", "update", "-qq"], check=True)
+    subprocess.run(["apt-get", "install", "-y", "-qq", "ffmpeg"], check=True)
     pyproject_path = repo_path / "pyproject.toml"
     if pyproject_path.exists():
         content = pyproject_path.read_text()
-        content = re.sub(r'"transformers>=([^"]+)"', r'"transformers>=4.0.0,<5.0.0"', content)
+        content = re.sub(r'"transformers>=([^"]+)"', r'"transformers>=\1,<5.0.0"', content)
         pyproject_path.write_text(content)
         logger.info("Patched pyproject.toml: transformers pinned to <5.0.0")
     logger.info("Creating and syncing uv virtual environment...")
-    subprocess.run(["uv", "venv", "--python", "3.10"], check=True)
+    subprocess.run(["uv", "venv", "--python", "3.13"], check=True)
     subprocess.run(["uv", "sync"], check=True)
     logger.info("Environment setup complete.")
 

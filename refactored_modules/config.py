@@ -1,5 +1,7 @@
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Dict, List
+
 
 @dataclass
 class PVDConfig:
@@ -7,9 +9,24 @@ class PVDConfig:
     repo_name: str = "platonic_rep_video"
     dataset_output_dir: Path = Path("data/pvd")
     dataset_json_path: Path = Path("assets/pe_video_dataset_1k_rephrased.jsonl")
-    vision_model_name: str = "dinov2"
-    llm_model_name: str = "google/gemma-2-2b-it"
-    
+    feature_dir: Path = Path("results/sample")  # features land in <feature_dir>/pvd/
+    results_dir: Path = Path("results/ours")  # our JSON results and figures
+    dataset: str = "pvd"
+    llm_name: str = "gemma2-2b-it"  # 9B does not fit a free Colab T4
+    llm_pool: str = "avg"
+    vision_name: str = "dinov2_large_video"
+    vision_pool: str = "cls"
+    k: int = 10
+    # Sweep grids. VideoMAEv2's native clip is 16 frames, so use multiples of 16 for it.
+    frame_counts: List[int] = field(default_factory=lambda: [1, 2, 4, 8, 16])
+    caption_counts: List[int] = field(default_factory=lambda: [1, 2, 4, 10])
+    video_models: List[str] = field(default_factory=lambda: ["dinov2_large_video", "videomaev2_base"])
+    # The authors' extractor falls back to a model's first supported pooling and names the file
+    # after it; videomaev2 only supports 'avg' (see registry/video.py pool_types).
+    pool_overrides: Dict[str, str] = field(default_factory=lambda: {"videomaev2_base": "avg", "videomaev2_large": "avg"})
+
+    def pool_for(self, video_model: str) -> str:
+        return self.pool_overrides.get(video_model, self.vision_pool)
+
     def __post_init__(self):
         self.repo_full_path = self.drive_base_dir / self.repo_name
-        self.repo_full_path.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,139 @@
+{
+  "vision": "dinov2_large_video",
+  "llm": "bloom-560m",
+  "n": 100,
+  "k": 10,
+  "chance_level": 0.10101010101010101,
+  "grid": [
+    {
+      "n_frames": 1,
+      "n_captions": 1,
+      "score": 0.3149999976158142,
+      "vision_layer": 20,
+      "llm_layer": 24
+    },
+    {
+      "n_frames": 1,
+      "n_captions": 2,
+      "score": 0.3529999852180481,
+      "vision_layer": 20,
+      "llm_layer": 23
+    },
+    {
+      "n_frames": 1,
+      "n_captions": 4,
+      "score": 0.36899998784065247,
+      "vision_layer": 19,
+      "llm_layer": 22
+    },
+    {
+      "n_frames": 1,
+      "n_captions": 10,
+      "score": 0.38100001215934753,
+      "vision_layer": 19,
+      "llm_layer": 24
+    },
+    {
+      "n_frames": 2,
+      "n_captions": 1,
+      "score": 0.3449999988079071,
+      "vision_layer": 20,
+      "llm_layer": 24
+    },
+    {
+      "n_frames": 2,
+      "n_captions": 2,
+      "score": 0.375,
+      "vision_layer": 20,
+      "llm_layer": 21
+    },
+    {
+      "n_frames": 2,
+      "n_captions": 4,
+      "score": 0.38999998569488525,
+      "vision_layer": 20,
+      "llm_layer": 22
+    },
+    {
+      "n_frames": 2,
+      "n_captions": 10,
+      "score": 0.39500001072883606,
+      "vision_layer": 19,
+      "llm_layer": 23
+    },
+    {
+      "n_frames": 4,
+      "n_captions": 1,
+      "score": 0.35899999737739563,
+      "vision_layer": 19,
+      "llm_layer": 24
+    },
+    {
+      "n_frames": 4,
+      "n_captions": 2,
+      "score": 0.3919999897480011,
+      "vision_layer": 19,
+      "llm_layer": 21
+    },
+    {
+      "n_frames": 4,
+      "n_captions": 4,
+      "score": 0.40799999237060547,
+      "vision_layer": 19,
+      "llm_layer": 23
+    },
+    {
+      "n_frames": 4,
+      "n_captions": 10,
+      "score": 0.4189999997615814,
+      "vision_layer": 19,
+      "llm_layer": 24
+    },
+    {
+      "n_frames": 8,
+      "n_captions": 1,
+      "score": 0.36500000953674316,
+      "vision_layer": 19,
+      "llm_layer": 24
+    },
+    {
+      "n_frames": 8,
+      "n_captions": 2,
+      "score": 0.39800000190734863,
+      "vision_layer": 19,
+      "llm_layer": 23
+    },
+    {
+      "n_frames": 8,
+      "n_captions": 4,
+      "score": 0.4180000126361847,
+      "vision_layer": 19,
+      "llm_layer": 22
+    },
+    {
+      "n_frames": 8,
+      "n_captions": 10,
+      "score": 0.42100000381469727,
+      "vision_layer": 19,
+      "llm_layer": 23
+    }
+  ],
+  "fit": {
+    "S_inf": 0.4438461363976807,
+    "C_f": 0.06197497855761338,
+    "C_c": 0.06324932144794744,
+    "alpha": 0.6928018750839304,
+    "beta": 1.1122463732476915,
+    "r2": 0.9911113379775456,
+    "n_points": 16
+  },
+  "meta": {
+    "hardware": "CPU only, 4 cores, x86_64, no GPU",
+    "text_model": "bloom-560m",
+    "video_model": "dinov2_large_video",
+    "n": 100,
+    "k": 10,
+    "chance_level": 0.10101010101010101,
+    "scale_down": "first 100 of 1024 PVD videos; frames [1, 2, 4, 8]; captions [1, 2, 4, 10]; single video model; NOT the full T4 experiment"
+  }
+}

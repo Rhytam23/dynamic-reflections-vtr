@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "hardware": "CPU only, 4 cores, x86_64, no GPU",
+    "text_model": "bloom-560m",
+    "video_model": "dinov2_large_video",
+    "n": 100,
+    "k": 10,
+    "chance_level": 0.10101010101010101,
+    "scale_down": "first 100 of 1024 PVD videos; frames [1, 2, 4, 8]; captions [1, 2, 4, 10]; single video model; NOT the full T4 experiment"
+  },
+  "n_frames": 8,
+  "n_captions": 10,
+  "best": {
+    "layer_x": 19,
+    "layer_y": 23,
+    "score": 0.42100000381469727,
+    "k": 10,
+    "n": 100
+  },
+  "chance_level": 0.10101010101010101
+}

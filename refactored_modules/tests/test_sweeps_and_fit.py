@@ -105,3 +105,19 @@ def test_plots_write_files(tmp_path):
     plot_fit(result, tmp_path / "fit.png")
     for name in ("heat.png", "sweep.png", "fit.png"):
         assert (tmp_path / name).stat().st_size > 1000
+
+
+def test_sweep_helpers_forward_annotation_path(monkeypatch, tmp_path):
+    cmds = []
+    monkeypatch.setattr(features, "run_streaming", lambda cmd, **kw: cmds.append(cmd))
+    sub = tmp_path / "subset.jsonl"
+    sweeps.extract_sweep_features(tmp_path, tmp_path / "f", "bloom-560m", "dinov2_large_video", [1, 2], [1, 4],
+                                  annotation_path=sub)
+    assert len(cmds) == 4
+    assert all(c[c.index("--annotation_path") + 1] == str(sub) for c in cmds)
+
+
+def test_download_script_avoids_video_feature_and_compiles():
+    from refactored_modules.utils import PVD_DOWNLOAD_SCRIPT
+    compile(PVD_DOWNLOAD_SCRIPT, "download_pvd.py", "exec")
+    assert "Video(" not in PVD_DOWNLOAD_SCRIPT  # datasets' Video feature imports torchcodec when encoding

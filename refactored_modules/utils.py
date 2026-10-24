@@ -96,7 +96,7 @@ def _patch_file(path: Path, old: str, new: str, marker: str, strict: bool = True
 
 PVD_DOWNLOAD_SCRIPT = """import argparse, json
 from pathlib import Path
-from datasets import load_dataset, Video
+from datasets import load_dataset, Value
 from tqdm import tqdm
 
 def main():
@@ -116,7 +116,7 @@ def main():
     if not video_ids_to_find:
         return
     ds = load_dataset('facebook/PE-Video', split='test', streaming=True)
-    ds = ds.cast_column('mp4', Video(decode=False))
+    ds = ds.cast_column('mp4', Value('binary'))  # raw bytes: the Video feature imports torchcodec on encode, which may not load
     with tqdm(total=len(video_ids_to_find), desc='Downloading videos') as pbar:
         for row in ds:
             if not video_ids_to_find: break

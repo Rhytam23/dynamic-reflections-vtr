@@ -15,25 +15,28 @@ logger = logging.getLogger(__name__)
 
 
 def extract_caption_sweep(repo_path: Path, feature_dir: Path, llm_name: str, caption_counts: Sequence[int],
-                          hf_token: Optional[str] = None):
+                          hf_token: Optional[str] = None, annotation_path: Optional[Path] = None):
     """One LLM extraction per caption count (skipped by the authors' script if the file exists)."""
     for nc in caption_counts:
         extract_features(repo_path, "llm", llm_names=[llm_name], num_captions=nc,
-                         feature_dir=feature_dir, hf_token=hf_token)
+                         feature_dir=feature_dir, hf_token=hf_token, annotation_path=annotation_path)
 
 
-def extract_frame_sweep(repo_path: Path, feature_dir: Path, vision_name: str, frame_counts: Sequence[int]):
+def extract_frame_sweep(repo_path: Path, feature_dir: Path, vision_name: str, frame_counts: Sequence[int],
+                        annotation_path: Optional[Path] = None):
     """One video extraction per frame count (skipped if the file exists, so an interrupted run resumes)."""
     for nf in frame_counts:
-        extract_features(repo_path, "video", video_names=[vision_name], num_frames=nf, feature_dir=feature_dir)
+        extract_features(repo_path, "video", video_names=[vision_name], num_frames=nf, feature_dir=feature_dir,
+                         annotation_path=annotation_path)
 
 
 def extract_sweep_features(
     repo_path: Path, feature_dir: Path, llm_name: str, vision_name: str,
     frame_counts: Sequence[int], caption_counts: Sequence[int], hf_token: Optional[str] = None,
+    annotation_path: Optional[Path] = None,
 ):
-    extract_caption_sweep(repo_path, feature_dir, llm_name, caption_counts, hf_token)
-    extract_frame_sweep(repo_path, feature_dir, vision_name, frame_counts)
+    extract_caption_sweep(repo_path, feature_dir, llm_name, caption_counts, hf_token, annotation_path)
+    extract_frame_sweep(repo_path, feature_dir, vision_name, frame_counts, annotation_path)
 
 
 def alias_full_caption_features(feature_dir: Path, llm_name: str, n_captions: int, llm_pool: str = "avg",

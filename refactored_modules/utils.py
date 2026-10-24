@@ -183,6 +183,15 @@ def patch_scripts(repo_path: Path):
         ef, "video_model.to('cuda')", "video_model.to('cuda' if torch.cuda.is_available() else 'cpu')",
         marker="'cuda' if torch.cuda.is_available() else 'cpu'")
 
+    # 6. Image-as-video models (native_num_frames == 1, e.g. DINOv2) get every video padded to the 8-frame
+    #    clip by temporal_resize, so 1 requested frame costs 8 forward passes. With native 1 nothing is
+    #    padded and the frame features are averaged as before; for 1/2/4/8 frames this is identical
+    #    (temporal_resize repeats each frame equally often) and up to 8x cheaper.
+    results["extract_features.py (native frames)"] = _patch_file(
+        ef, "        native_num_frames=video_cfg.clip_len,\n",
+        "        native_num_frames=(\n            1 if video_cfg.native_num_frames == 1 else video_cfg.clip_len\n        ),\n",
+        marker="1 if video_cfg.native_num_frames == 1 else video_cfg.clip_len")
+
     for name, status in results.items():
         print(f"patch {name}: {status}", flush=True)
     return results

@@ -131,10 +131,11 @@ def test_patch_scripts_cpu_cuda_guards_idempotent(tmp_path):
     (src / "registry/video.py").write_text("resolve_data_config(self.model.pretrained_cfg, model=self.model)\n")
     (src / "dataloaders/pvd.py").write_text(utils.PVD_IMPORT_OLD)
     (src / "extract_features.py").write_text(
-        "num_workers=10,\n  torch.cuda.empty_cache()\n  torch.cuda.ipc_collect()\n  video_model.to('cuda')\n")
+        "num_workers=10,\n        native_num_frames=video_cfg.clip_len,\n  torch.cuda.empty_cache()\n  torch.cuda.ipc_collect()\n  video_model.to('cuda')\n")
     utils.patch_scripts(tmp_path)
     once = (src / "extract_features.py").read_text()
     utils.patch_scripts(tmp_path)
     assert (src / "extract_features.py").read_text() == once
     assert "if torch.cuda.is_available():\n    torch.cuda.empty_cache()" in once
     assert "'cuda' if torch.cuda.is_available() else 'cpu'" in once
+    assert "1 if video_cfg.native_num_frames == 1 else video_cfg.clip_len" in once

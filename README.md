@@ -9,8 +9,8 @@ Course project for *Introduction to Generative Intelligence* (CMI). The paper's 
 [google-deepmind/platonic_rep_video](https://github.com/google-deepmind/platonic_rep_video); this repo reuses it for feature
 extraction and adds the analysis, robustness and retrieval layers described below.
 
-> **Status (please read):** the code and the full notebook flow are verified by 41 automated tests with Colab, network and GPU
-> simulated. **The real-GPU run has not been done yet, so this repo reports no experimental numbers.** The results section
+> **Status (please read):** the code and the full notebook flow are verified by 44 automated tests with Colab, network and GPU
+> simulated. **The real-GPU run has not been done yet; the only measured numbers are in the clearly labelled "Scaled-down CPU run" section below.** The results section
 > below is a template that the notebook fills in. Nothing in this repo is a claim about measured performance until it is
 > replaced by the output of that run.
 
@@ -135,6 +135,42 @@ Other decisions:
 - feature file names matching the authors' code, and the authors' CLI accepting every command issued;
 - retrieval on synthetic aligned data;
 - a **simulation of the whole notebook** with Colab, network and GPU faked, covering success, a failed Hugging Face check, a CPU-only runtime and a failing encoder.
+
+## Scaled-down CPU run (NOT the full T4 experiment)
+
+Real output of `run_cpu_scaled.py --n 100`, executed in a cloud container. It is a much smaller experiment than the paper's,
+so **do not compare these numbers with the paper or with a full-scale run.**
+
+- **Hardware:** CPU only (4 cores, no GPU). Extraction took about 82 min.
+- **Videos:** first N = 100 of the 1024 PVD videos. **k = 10, chance level = k/(N-1) = 0.101.**
+- **Video model:** `dinov2_large_video` (CLS pooling), frames 1, 2, 4, 8 (the paper's range goes higher).
+- **Text model:** `bloom-560m` (bloomz-560m, ungated). **Not Gemma-2-2B-it**, which is gated and no `HF_TOKEN` was available. Numbers are therefore not comparable with Gemma results.
+- Captions: the `rephrased_captions` of each video, first 1, 2, 4 or 10 of them.
+- Each cell is the best of all layer pairs (25 x 25 incl. concatenation) **chosen on the same 100 videos**, so scores are optimistically biased and N is small.
+
+Mutual k-NN alignment (`results/ours/grid_bloom-560m_dinov2_large_video_n100.json`):
+
+| frames \ captions | 1 | 2 | 4 | 10 |
+|---|---|---|---|---|
+| 1 | 0.315 | 0.353 | 0.369 | 0.381 |
+| 2 | 0.345 | 0.375 | 0.390 | 0.395 |
+| 4 | 0.359 | 0.392 | 0.408 | 0.419 |
+| 8 | 0.365 | 0.398 | 0.418 | 0.421 |
+
+Eq. 2 fit over these 16 points: S_inf = 0.44, C_f = 0.06, C_c = 0.06, alpha = 0.69, beta = 1.11, R^2 = 0.991.
+Sixteen points for five parameters on a single noisy small-N run, so the parameters are only indicative.
+
+Held-out video-to-caption retrieval (frames 8, captions 10; layers picked on the 80 training videos only; 20 test videos, so recall values move in steps of 0.05):
+
+| | recall@1 | recall@5 | recall@10 |
+|---|---|---|---|
+| chance | 0.05 | 0.25 | 0.50 |
+| ridge map | 0.35 | 0.70 | 0.90 |
+| relative representations | 0.25 | 0.90 | 0.95 |
+
+Figures: `results/ours/sweeps_n100.png`, `fit_n100.png`, `layers_n100.png`. Only one DINOv2-large run exists; VideoMAEv2 and the other models were not run.
+
+Fixes found by this run (all in `utils.patch_scripts` / `sweeps.py`, with tests): the sweep helpers could not pass a subset annotation file; the PVD download crashed without a loadable `torchcodec`; the authors' extractor hard-codes CUDA calls; and it pads image-as-video models (DINOv2) to 8 frames per video, which for 1/2/4/8 frames gives identical features (max abs difference 7.6e-6 on 2 videos) at up to 8x the cost.
 
 ## 8. Results
 

@@ -121,3 +121,20 @@ def test_download_script_avoids_video_feature_and_compiles():
     from refactored_modules.utils import PVD_DOWNLOAD_SCRIPT
     compile(PVD_DOWNLOAD_SCRIPT, "download_pvd.py", "exec")
     assert "Video(" not in PVD_DOWNLOAD_SCRIPT  # datasets' Video feature imports torchcodec when encoding
+
+
+def test_patch_scripts_cpu_cuda_guards_idempotent(tmp_path):
+    from refactored_modules import utils
+    src = tmp_path / "src" / "vprh"
+    for d in ("misc", "registry", "dataloaders"):
+        (src / d).mkdir(parents=True)
+    (src / "registry/video.py").write_text("resolve_data_config(self.model.pretrained_cfg, model=self.model)\n")
+    (src / "dataloaders/pvd.py").write_text(utils.PVD_IMPORT_OLD)
+    (src / "extract_features.py").write_text(
+        "num_workers=10,\n  torch.cuda.empty_cache()\n  torch.cuda.ipc_collect()\n  video_model.to('cuda')\n")
+    utils.patch_scripts(tmp_path)
+    once = (src / "extract_features.py").read_text()
+    utils.patch_scripts(tmp_path)
+    assert (src / "extract_features.py").read_text() == once
+    assert "if torch.cuda.is_available():\n    torch.cuda.empty_cache()" in once
+    assert "'cuda' if torch.cuda.is_available() else 'cpu'" in once

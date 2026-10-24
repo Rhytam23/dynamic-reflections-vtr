@@ -172,6 +172,17 @@ def patch_scripts(repo_path: Path):
         repo_path / "src" / "vprh" / "extract_features.py",
         "num_workers=10,", "num_workers=min(4, os.cpu_count() or 2),", marker="os.cpu_count()")
 
+    # 5. CPU-only machines: the authors' extractor hard-codes CUDA calls (cache cleanup after the LLM
+    #    features are saved, and moving the video model to 'cuda')
+    ef = repo_path / "src" / "vprh" / "extract_features.py"
+    results["extract_features.py (cuda cleanup)"] = _patch_file(
+        ef, "  torch.cuda.empty_cache()\n  torch.cuda.ipc_collect()\n",
+        "  if torch.cuda.is_available():\n    torch.cuda.empty_cache()\n    torch.cuda.ipc_collect()\n",
+        marker="if torch.cuda.is_available():\n    torch.cuda.empty_cache()\n    torch.cuda.ipc_collect()")
+    results["extract_features.py (video device)"] = _patch_file(
+        ef, "video_model.to('cuda')", "video_model.to('cuda' if torch.cuda.is_available() else 'cpu')",
+        marker="'cuda' if torch.cuda.is_available() else 'cpu'")
+
     for name, status in results.items():
         print(f"patch {name}: {status}", flush=True)
     return results

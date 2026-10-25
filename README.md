@@ -170,7 +170,7 @@ Held-out video-to-caption retrieval (frames 8, captions 10; layers picked on the
 
 Figures: `results/ours/sweeps_n100.png`, `fit_n100.png`, `layers_n100.png`. Only one DINOv2-large run exists; VideoMAEv2 and the other models were not run.
 
-Fixes found by this run (all in `utils.patch_scripts` / `sweeps.py`, with tests): the sweep helpers could not pass a subset annotation file; the PVD download crashed without a loadable `torchcodec`; the authors' extractor hard-codes CUDA calls; and it pads image-as-video models (DINOv2) to 8 frames per video, which for 1/2/4/8 frames gives identical features (max abs difference 7.6e-6 on 2 videos) at up to 8x the cost.
+Fixes found by this run (all in `utils.patch_scripts` / `sweeps.py`, with tests): the sweep helpers could not pass a subset annotation file; the PVD download crashed without a loadable `torchcodec`; the authors' extractor hard-codes CUDA calls; and it pads image-as-video models (DINOv2) to 8 frames per video, which costs up to 8x more. Removing the padding was checked on only 2 videos at 2 and 4 frames, where features matched the padded ones to within 7.6e-6 (float noise); 1 and 8 frames were not separately checked.
 
 ## 8. Results
 

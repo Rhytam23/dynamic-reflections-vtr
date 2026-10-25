@@ -1,0 +1,37 @@
+{
+  "setup": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 0.0
+  },
+  "download_videos": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 0.02
+  },
+  "extract_text": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 3.42
+  },
+  "extract_video": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 78.24
+  },
+  "grid": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 0.12
+  },
+  "layer_heatmap": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 0.01
+  },
+  "retrieval": {
+    "status": "ok",
+    "detail": "",
+    "minutes": 0.0
+  }
+}

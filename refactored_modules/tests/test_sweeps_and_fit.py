@@ -105,3 +105,37 @@ def test_plots_write_files(tmp_path):
     plot_fit(result, tmp_path / "fit.png")
     for name in ("heat.png", "sweep.png", "fit.png"):
         assert (tmp_path / name).stat().st_size > 1000
+
+
+def test_sweep_helpers_forward_annotation_path(monkeypatch, tmp_path):
+    cmds = []
+    monkeypatch.setattr(features, "run_streaming", lambda cmd, **kw: cmds.append(cmd))
+    sub = tmp_path / "subset.jsonl"
+    sweeps.extract_sweep_features(tmp_path, tmp_path / "f", "bloom-560m", "dinov2_large_video", [1, 2], [1, 4],
+                                  annotation_path=sub)
+    assert len(cmds) == 4
+    assert all(c[c.index("--annotation_path") + 1] == str(sub) for c in cmds)
+
+
+def test_download_script_avoids_video_feature_and_compiles():
+    from refactored_modules.utils import PVD_DOWNLOAD_SCRIPT
+    compile(PVD_DOWNLOAD_SCRIPT, "download_pvd.py", "exec")
+    assert "Video(" not in PVD_DOWNLOAD_SCRIPT  # datasets' Video feature imports torchcodec when encoding
+
+
+def test_patch_scripts_cpu_cuda_guards_idempotent(tmp_path):
+    from refactored_modules import utils
+    src = tmp_path / "src" / "vprh"
+    for d in ("misc", "registry", "dataloaders"):
+        (src / d).mkdir(parents=True)
+    (src / "registry/video.py").write_text("resolve_data_config(self.model.pretrained_cfg, model=self.model)\n")
+    (src / "dataloaders/pvd.py").write_text(utils.PVD_IMPORT_OLD)
+    (src / "extract_features.py").write_text(
+        "num_workers=10,\n        native_num_frames=video_cfg.clip_len,\n  torch.cuda.empty_cache()\n  torch.cuda.ipc_collect()\n  video_model.to('cuda')\n")
+    utils.patch_scripts(tmp_path)
+    once = (src / "extract_features.py").read_text()
+    utils.patch_scripts(tmp_path)
+    assert (src / "extract_features.py").read_text() == once
+    assert "if torch.cuda.is_available():\n    torch.cuda.empty_cache()" in once
+    assert "'cuda' if torch.cuda.is_available() else 'cpu'" in once
+    assert "1 if video_cfg.native_num_frames == 1 else video_cfg.clip_len" in once

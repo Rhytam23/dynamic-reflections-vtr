@@ -1,0 +1,52 @@
+{
+  "n_train": 80,
+  "n_test": 20,
+  "vision_layer": 19,
+  "text_layer": 22,
+  "chance": {
+    "recall@1": 0.05,
+    "recall@5": 0.25,
+    "recall@10": 0.5
+  },
+  "ridge": {
+    "recall@1": 0.35,
+    "recall@5": 0.7,
+    "recall@10": 0.9
+  },
+  "relative": {
+    "recall@1": 0.25,
+    "recall@5": 0.9,
+    "recall@10": 0.95
+  },
+  "test_indices": [
+    5,
+    8,
+    9,
+    10,
+    11,
+    13,
+    16,
+    20,
+    27,
+    36,
+    37,
+    52,
+    72,
+    75,
+    81,
+    82,
+    83,
+    90,
+    93,
+    94
+  ],
+  "meta": {
+    "hardware": "CPU only, 4 cores, x86_64, no GPU",
+    "text_model": "bloom-560m",
+    "video_model": "dinov2_large_video",
+    "n": 100,
+    "k": 10,
+    "chance_level": 0.10101010101010101,
+    "scale_down": "first 100 of 1024 PVD videos; frames [1, 2, 4, 8]; captions [1, 2, 4, 10]; single video model; NOT the full T4 experiment"
+  }
+}

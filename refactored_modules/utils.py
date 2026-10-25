@@ -96,7 +96,7 @@ def _patch_file(path: Path, old: str, new: str, marker: str, strict: bool = True
 
 PVD_DOWNLOAD_SCRIPT = """import argparse, json
 from pathlib import Path
-from datasets import load_dataset, Video
+from datasets import load_dataset, Value
 from tqdm import tqdm
 
 def main():
@@ -116,7 +116,7 @@ def main():
     if not video_ids_to_find:
         return
     ds = load_dataset('facebook/PE-Video', split='test', streaming=True)
-    ds = ds.cast_column('mp4', Video(decode=False))
+    ds = ds.cast_column('mp4', Value('binary'))  # raw bytes: the Video feature imports torchcodec on encode, which may not load
     with tqdm(total=len(video_ids_to_find), desc='Downloading videos') as pbar:
         for row in ds:
             if not video_ids_to_find: break
@@ -171,6 +171,26 @@ def patch_scripts(repo_path: Path):
     results["extract_features.py"] = _patch_file(
         repo_path / "src" / "vprh" / "extract_features.py",
         "num_workers=10,", "num_workers=min(4, os.cpu_count() or 2),", marker="os.cpu_count()")
+
+    # 5. CPU-only machines: the authors' extractor hard-codes CUDA calls (cache cleanup after the LLM
+    #    features are saved, and moving the video model to 'cuda')
+    ef = repo_path / "src" / "vprh" / "extract_features.py"
+    results["extract_features.py (cuda cleanup)"] = _patch_file(
+        ef, "  torch.cuda.empty_cache()\n  torch.cuda.ipc_collect()\n",
+        "  if torch.cuda.is_available():\n    torch.cuda.empty_cache()\n    torch.cuda.ipc_collect()\n",
+        marker="if torch.cuda.is_available():\n    torch.cuda.empty_cache()\n    torch.cuda.ipc_collect()")
+    results["extract_features.py (video device)"] = _patch_file(
+        ef, "video_model.to('cuda')", "video_model.to('cuda' if torch.cuda.is_available() else 'cpu')",
+        marker="'cuda' if torch.cuda.is_available() else 'cpu'")
+
+    # 6. Image-as-video models (native_num_frames == 1, e.g. DINOv2) get every video padded to the 8-frame
+    #    clip by temporal_resize, so 1 requested frame costs 8 forward passes. With native 1 nothing is
+    #    padded and the frame features are averaged as before; for 1/2/4/8 frames this is identical
+    #    (temporal_resize repeats each frame equally often) and up to 8x cheaper.
+    results["extract_features.py (native frames)"] = _patch_file(
+        ef, "        native_num_frames=video_cfg.clip_len,\n",
+        "        native_num_frames=(\n            1 if video_cfg.native_num_frames == 1 else video_cfg.clip_len\n        ),\n",
+        marker="1 if video_cfg.native_num_frames == 1 else video_cfg.clip_len")
 
     for name, status in results.items():
         print(f"patch {name}: {status}", flush=True)

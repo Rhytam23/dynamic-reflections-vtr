@@ -111,7 +111,7 @@ python -m pytest refactored_modules/tests -q
 | `refactored_modules/preflight.py`, `runner.py` | Fail-fast checks; stage runner with dependencies and auto-disconnect |
 | `refactored_modules/cv2_decoder.py`, `utils.py`, `config.py` | OpenCV decoder, patches to the authors' repo, settings |
 | `refactored_modules/colab_inference.py` | Colab-only: frame preview and an LLM that merges retrieved captions |
-| `refactored_modules/tests/` | 41 tests, no GPU needed |
+| `refactored_modules/tests/` | 44 tests, no GPU needed |
 | `paper.pdf`, `gen_ai_presentation_*.pptx` | The paper and the course presentations |
 
 ## 6. Engineering decisions worth knowing about
@@ -128,7 +128,7 @@ Other decisions:
 
 ## 7. Validation done so far
 
-41 tests (run with `python -m pytest refactored_modules/tests -q`) cover:
+44 tests (run with `python -m pytest refactored_modules/tests -q`) cover:
 - the mutual k-NN metric **against a transcription of the authors' algorithm**;
 - the scaling-law fit **recovering known parameters** from synthetic data;
 - the OpenCV decoder driving the authors' real `PerceptionVideoDataset`;

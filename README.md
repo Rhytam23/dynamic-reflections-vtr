@@ -56,7 +56,7 @@ flowchart LR
     H --> I[Fit Eq. 2<br/>S_inf, C_f, C_c, alpha, beta, R2]
     B --> J[Retrieval: ridge map or<br/>relative representations]
     C --> J
-    J --> K[recall@k on held-out videos]
+    J --> K["recall at k on held-out videos"]
 ```
 
 1. **Features.** The authors' extraction scripts produce per-layer embeddings for every video (`[N, layers, dim]`) and every caption set.

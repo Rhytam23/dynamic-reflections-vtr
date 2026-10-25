@@ -44,19 +44,19 @@ trend** (does alignment increase with frames and captions? does the Eq. 2 fit ho
 
 ```mermaid
 flowchart LR
-    A[PVD videos + captions] --> B[Text features<br/>Gemma-2-2B-it, per layer]
-    A --> C[Video features<br/>DINOv2 / VideoMAEv2, per layer]
-    B --> D[Mutual k-NN<br/>layer x layer sweep]
+    A["PVD videos and captions"] --> B["Text features: Gemma-2-2B-it, per layer"]
+    A --> C["Video features: DINOv2 or VideoMAEv2, per layer"]
+    B --> D["Mutual kNN: layer by layer sweep"]
     C --> D
-    D --> E[Baseline score<br/>N, k, chance level]
-    B --> F[Sweep: captions 1,2,4,10]
-    C --> G[Sweep: frames 1..48]
-    F --> H[Frames x captions grid]
+    D --> E["Baseline score with N, k and chance level"]
+    B --> F["Sweep over captions: 1, 2, 4, 10"]
+    C --> G["Sweep over frames: 1 up to 48"]
+    F --> H["Frames by captions grid"]
     G --> H
-    H --> I[Fit Eq. 2<br/>S_inf, C_f, C_c, alpha, beta, R2]
-    B --> J[Retrieval: ridge map or<br/>relative representations]
+    H --> I["Fit of Eq 2: S inf, C f, C c, alpha, beta, R squared"]
+    B --> J["Retrieval: ridge map or relative representations"]
     C --> J
-    J --> K["recall at k on held-out videos"]
+    J --> K["Recall at k on held-out videos"]
 ```
 
 1. **Features.** The authors' extraction scripts produce per-layer embeddings for every video (`[N, layers, dim]`) and every caption set.

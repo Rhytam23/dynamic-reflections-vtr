@@ -1,0 +1,9 @@
+# Local test / analysis environment (no GPU needed).
+# The Colab notebook builds its own environment for the authors' extraction code.
+numpy
+scipy
+matplotlib
+torch
+opencv-python-headless
+pillow
+pytest
